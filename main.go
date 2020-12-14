@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // Product is the struct
@@ -30,6 +32,15 @@ func getNextID() int {
 	return highestID + 1
 }
 
+func findProductByID(productID int) (*Product, int) {
+	for i, product := range productList {
+		if product.ProductID == productID {
+			return &product, i
+		}
+	}
+	return nil, -1
+}
+
 func init() {
 	productsJSON := `[
 		{"productId": 3, "manufacturer": "Sas", "sku": "Asdad", "upc": "12313131", "pricePerUnit": "131.12", "quantityOnHand": 5908, "productName": "la"}
@@ -38,6 +49,33 @@ func init() {
 	err := json.Unmarshal([]byte(productsJSON), &productList)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func productHandler(w http.ResponseWriter, r *http.Request) {
+	urlPathSegments := strings.Split(r.URL.Path, "products/")
+	productID, err := strconv.Atoi(urlPathSegments[len(urlPathSegments)-1])
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	product, listItemIndex := findProductByID(productID)
+	if listItemIndex == -1 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		productJSON, err := json.Marshal(product)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(productJSON)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -71,6 +109,8 @@ func productsHandler(w http.ResponseWriter, r *http.Request) {
 		productList = append(productList, newProduct)
 		w.WriteHeader(http.StatusCreated)
 		return
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
